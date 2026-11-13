@@ -1,0 +1,156 @@
+1. Цель и позиционирование
+Fullstack-приложение для управления задачами на канбан-доске с реалтайм-синхронизацией. Цель — показать работодателям навыки бэкенда (транзакции, конкурентность, WebSocket, аутентификация) в связке с сильным фронтендом.
+
+В скоупе (MVP): регистрация/логин, доски у пользователя, колонки и карточки, drag&drop с сохранением порядка, реалтайм через WebSocket, шаринг доски по ссылке с ролями.
+
+Вне скоупа (v2+): вложения файлов, комментарии, упоминания, уведомления, офлайн-режим.
+
+2. Итоговый стек
+Backend
+Слой	Выбор
+Runtime / язык	Node.js 20+ / TypeScript
+Фреймворк	NestJS
+ORM	Prisma 
+БД	PostgreSQL 16 (Docker)
+Реалтайм	Socket.IO
+Auth	JWT (access + refresh) + argon2/bcrypt
+Валидация	Zod
+Rate limit	@fastify/rate-limit
+Кэш/очереди (v2)	Redis + BullMQ
+Тесты	Vitest + Supertest
+
+Frontend
+Слой	Выбор
+Фреймворк	Vue 3 + TypeScript + Composition API (<script setup>)
+Сборка	Vite
+Состояние	Pinia
+Drag&drop	vue-draggable-plus (обёртка над SortableJS, поддерживает перенос между списками)
+Серверное состояние	@tanstack/vue-query (опционально)
+HTTP	ofetch или axios
+WebSocket	socket.io-client (клиент создавать вне компонентов, состояние в reactive)
+Формы/валидация	vee-validate + Zod (или @chemical-x/forms)
+Стили	Tailwind CSS
+
+Инфраструктура
+Docker Compose для Postgres (+ Redis в v2).
+
+pnpm workspaces (монорепо) + пакет packages/shared с Zod-схемами и константами WS-событий — шарятся между бэком и фронтом.
+
+dotenv + zod-валидация env на старте.
+
+text
+kanban/
+├─ apps/
+│  ├─ api/          # Fastify + Prisma + Socket.IO
+│  └─ web/          # Vue 3 + Vite + Pinia
+├─ packages/
+│  └─ shared/       # Zod-схемы, DTO-типы, константы WS-событий
+├─ docker-compose.yml
+└─ pnpm-workspace.yaml
+Не брать в MVP: GraphQL, микросервисы, tRPC, свой drag&drop, Redis (если не нужен pub/sub).
+
+3. Модель данных (Postgres)
+sql
+users         (id, email, password_hash, name, created_at)
+boards        (id, title, owner_id → users, created_at)
+board_members (board_id → boards, user_id → users, role enum('editor','viewer'), PK(board_id,user_id))
+columns       (id, board_id → boards, title, position numeric, created_at)
+cards         (id, column_id → columns, title, description, position numeric,
+               created_by → users, created_at, updated_at, version int)
+Ключевые решения:
+
+position numeric, а не int: вставка между карточками — среднее (posA + posB) / 2, без переписывания колонки. Периодическая ребалансировка в фоне при плотных значениях.
+
+version int в cards/columns — для оптимистичных блокировок.
+
+Индексы: cards(column_id, position), columns(board_id, position).
+
+Каскадное удаление: доска → колонки → карточки (ON DELETE CASCADE).
+
+4. REST API
+Префикс /api, защищённые — Authorization: Bearer <token>.
+
+text
+POST   /auth/register | /auth/login | /auth/refresh | /auth/logout
+GET    /auth/me
+
+GET    /boards                    POST /boards
+GET    /boards/:id                PATCH/DELETE /boards/:id
+POST   /boards/:id/share          POST /boards/join   { shareToken }
+
+POST   /boards/:boardId/columns   PATCH/DELETE /columns/:id
+
+POST   /columns/:columnId/cards   GET/PATCH/DELETE /cards/:id
+POST   /cards/:id/move            { toColumnId, beforeCardId, afterCardId, expectedVersion }
+/move — отдельный эндпоинт, потому что это транзакция: сменить column_id + вычислить position + проверить версию соседей (SELECT ... FOR UPDATE). Возвращает карточку + новую версию; при конфликте — 409.
+
+5. Конкурентность и реалтайм
+Оптимистичные блокировки: клиент присылает expectedVersion; бэкенд делает UPDATE ... WHERE id = ? AND version = ?. Ноль строк → 409 Conflict. Клиент при 409 подтягивает актуальное состояние по WS.
+
+WebSocket (Socket.IO), комнаты по boardId:
+
+Сервер → клиент:
+
+text
+board.joined, column.created/updated/deleted,
+card.created/updated/moved/deleted, presence.updated
+Клиент → сервер: board.subscribe, board.unsubscribe.
+
+Правила:
+
+Авторизация WS в handshake; при subscribe проверять членство в доске.
+
+Клиент не фиксирует свои изменения локально «навсегда»: отправляет REST → состояние обновляет по WS-событию (оптимистичный UI + откат при ошибке).
+
+В MVP — один инстанс бэка; Redis pub/sub адаптер — только в v2.
+
+
+6. Этапы разработки
+Скелет (1–2 дня): Postgres + миграции, auth, CRUD досок и колонок (без реалтайма и dnd).
+
+Карточки и порядок: CRUD карточек, position, /move в транзакции, тесты на move (включая параллельный).
+
+Фронт-доска: vue-draggable-plus, оптимистичные обновления, откат.
+
+Реалтайм: Socket.IO, комнаты, события, синхронизация двух вкладок.
+
+Шаринг и права: share-токены, роли, проверки доступа во всех эндпоинтах и в WS.
+
+Полировка: ребалансировка позиций, presence, обработка 409 в UI, e2e на два клиента.
+
+Критерии готовности MVP:
+
+Два пользователя в двух браузерах видят изменения < 500 мс.
+
+Одновременное перемещение не теряется (409 + консистентное состояние).
+
+Viewer не может редактировать (ни REST, ни WS).
+
+Порядок сохраняется после перезагрузки.
+
+Удаление доски каскадно чистит данные.
+
+
+7. Советы по разработке
+Самая ценная часть для обучения — транзакция в /move. Напишите тест: 50 параллельных перемещений в одну колонку, проверьте отсутствие дублей позиций.
+
+Тест на оптимистичную блокировку: два клиента с одной version → второй получает 409.
+
+Тест на WS-авторизацию: подключение к чужой доске должно отбиваться.
+
+Ребалансировка: скрипт, переписывающий position в целые 1..n, когда разница между соседями < epsilon.
+
+Не переусложняйте: один процесс, REST вместо GraphQL, никаких микросервисов.
+
+8. Оформление репозитория
+README: что это, стек, скриншоты/GIF, быстрый старт (docker compose up + pnpm dev), архитектурные решения (почему numeric для позиций, как устроен /move, как работает реалтайм и WS-авторизация), что не реализовано (честность ценится).
+
+Чистая история коммитов — осмысленные шаги, а не один «init».
+
+Тесты — хотя бы на /move и оптимистичные блокировки (отличает пет-проект от туториала).
+
+.env.example + инструкция по переменным.
+
+CI (GitHub Actions): линт + тесты на push, зелёный бейдж в README.
+
+Лицензия (MIT) и .gitignore.

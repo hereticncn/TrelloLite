@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trello-lite-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trello}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trello}
+      POSTGRES_DB: ${POSTGRES_DB:-trello_lite}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - trello_lite_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-trello} -d ${POSTGRES_DB:-trello_lite}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  trello_lite_pgdata:

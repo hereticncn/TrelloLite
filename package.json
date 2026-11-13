@@ -1,0 +1,22 @@
+{
+  "name": "trello-lite",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @trello/shared build && pnpm --parallel --filter @trello/api --filter @trello/web dev",
+    "dev:api": "pnpm --filter @trello/shared build && pnpm --filter @trello/api dev",
+    "dev:web": "pnpm --filter @trello/shared build && pnpm --filter @trello/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @trello/api prisma:generate",
+    "db:migrate": "pnpm --filter @trello/api prisma:migrate",
+    "db:studio": "pnpm --filter @trello/api prisma:studio"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2"
+  }
+}
