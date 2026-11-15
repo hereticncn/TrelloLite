@@ -122,7 +122,7 @@ const submit = handleSubmit(async (values) => {
     <p class="mt-7 text-center text-[13px] text-slate-500">
       Ещё нет аккаунта?
       <RouterLink
-        to="/register"
+        :to="{ name: 'register', query: route.query }"
         class="font-bold text-slate-200 underline-offset-4 transition-colors hover:text-lime-300 hover:underline"
       >
         Создать бесплатно

@@ -11,6 +11,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/boards/:id',
+      name: 'board',
+      component: () => import('@/views/BoardView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/join/:token',
+      name: 'join',
+      component: () => import('@/views/JoinBoardView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

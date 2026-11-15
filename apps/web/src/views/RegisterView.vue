@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { registerSchema } from '@trello/shared'
@@ -11,6 +11,7 @@ import { getApiErrorMessage, getApiFieldErrors } from '@/lib/api-error'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 const serverError = ref('')
@@ -43,7 +44,8 @@ const submit = handleSubmit(async (values) => {
       email: values.email,
       password: values.password,
     })
-    await router.replace('/')
+    const redirect = route.query.redirect
+    await router.replace(typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/')
   } catch (error) {
     serverError.value = getApiErrorMessage(error)
     setErrors(getApiFieldErrors(error))
@@ -151,7 +153,7 @@ const submit = handleSubmit(async (values) => {
     <p class="mt-6 text-center text-[13px] text-slate-500">
       Уже есть аккаунт?
       <RouterLink
-        to="/login"
+        :to="{ name: 'login', query: route.query }"
         class="font-bold text-slate-200 underline-offset-4 transition-colors hover:text-lime-300 hover:underline"
       >
         Войти

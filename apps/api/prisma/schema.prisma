@@ -14,6 +14,9 @@ model User {
   name         String         @db.VarChar(100)
   createdAt    DateTime       @default(now()) @map("created_at")
   refreshTokens RefreshToken[]
+  ownedBoards  Board[]        @relation("BoardOwner")
+  boardMembers BoardMember[]
+  createdCards Card[]         @relation("CardCreator")
 
   @@map("users")
 }
@@ -33,4 +36,76 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+enum BoardRole {
+  editor
+  viewer
+
+  @@map("board_role")
+}
+
+model Board {
+  id         String    @id @default(uuid()) @db.Uuid
+  title      String    @db.VarChar(120)
+  ownerId    String    @map("owner_id") @db.Uuid
+  shareToken String?   @unique @map("share_token") @db.VarChar(64)
+  shareRole  BoardRole @default(viewer) @map("share_role")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  owner    User          @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members  BoardMember[]
+  columns  Column[]
+
+  @@index([ownerId])
+  @@map("boards")
+}
+
+model BoardMember {
+  boardId   String    @map("board_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  role      BoardRole @default(editor)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([boardId, userId])
+  @@index([userId])
+  @@map("board_members")
+}
+
+model Column {
+  id        String   @id @default(uuid()) @db.Uuid
+  boardId   String   @map("board_id") @db.Uuid
+  title     String   @db.VarChar(120)
+  position  Decimal  @db.Decimal(20, 6)
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards Card[]
+
+  @@index([boardId, position])
+  @@map("columns")
+}
+
+model Card {
+  id          String   @id @default(uuid()) @db.Uuid
+  columnId    String   @map("column_id") @db.Uuid
+  title       String   @db.VarChar(120)
+  description String   @default("") @db.Text
+  position    Decimal  @db.Decimal(20, 6)
+  version     Int      @default(1)
+  createdById String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  column    Column @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("CardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([columnId, position])
+  @@map("cards")
 }

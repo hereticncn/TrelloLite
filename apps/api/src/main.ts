@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify'
+import { IoAdapter } from '@nestjs/platform-socket.io'
 import { AppModule } from './app.module'
 import { corsOrigins, env } from './config/env'
 
@@ -26,6 +27,7 @@ async function bootstrap(): Promise<void> {
   })
 
   app.setGlobalPrefix('api')
+  app.useWebSocketAdapter(new IoAdapter(app))
   app.enableCors({
     origin: corsOrigins,
     credentials: true,

@@ -12,6 +12,7 @@
     "dev:web": "pnpm --filter @trello/shared build && pnpm --filter @trello/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @trello/api test",
     "db:generate": "pnpm --filter @trello/api prisma:generate",
     "db:migrate": "pnpm --filter @trello/api prisma:migrate",
     "db:studio": "pnpm --filter @trello/api prisma:studio"
