@@ -18,5 +18,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
-README.md
 task.txt
+
+AGENTS.md
+END_WORK.md
