@@ -87,6 +87,9 @@ importers:
       prisma:
         specifier: ^6.2.1
         version: 6.19.3(typescript@5.9.3)
+      socket.io-client:
+        specifier: ^4.8.1
+        version: 4.8.4
       supertest:
         specifier: ^7.3.2
         version: 7.3.2

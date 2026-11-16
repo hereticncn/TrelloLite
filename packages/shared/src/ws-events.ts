@@ -1,4 +1,4 @@
-import type { ColumnDto } from './board'
+import type { BoardMemberDto, ColumnDto } from './board'
 import type { CardDto } from './card'
 
 /**
@@ -19,6 +19,8 @@ export const WS_EVENTS = {
   CARD_UPDATED: 'card.updated',
   CARD_MOVED: 'card.moved',
   CARD_DELETED: 'card.deleted',
+  BOARD_MEMBER_UPDATED: 'board.member.updated',
+  BOARD_MEMBER_REMOVED: 'board.member.removed',
   PRESENCE_UPDATED: 'presence.updated',
 } as const
 
@@ -42,3 +44,6 @@ export type CardCreatedPayload = { boardId: string; columnId: string; card: Card
 export type CardUpdatedPayload = { boardId: string; card: CardDto }
 export type CardMovedPayload = { boardId: string; card: CardDto }
 export type CardDeletedPayload = { boardId: string; cardId: string; columnId: string }
+
+export type BoardMemberUpdatedPayload = { boardId: string; member: BoardMemberDto }
+export type BoardMemberRemovedPayload = { boardId: string; userId: string }

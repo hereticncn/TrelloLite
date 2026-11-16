@@ -15,6 +15,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import CardDialog from '@/components/CardDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import NameDialog from '@/components/NameDialog.vue'
+import MembersDialog from '@/components/MembersDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { pluralizeCards, pluralizeColumns } from '@/lib/plural'
@@ -39,6 +40,7 @@ const boards = useBoardsStore()
 
 const activeDialog = ref<DialogKind>(null)
 const isShareOpen = ref(false)
+const isMembersOpen = ref(false)
 const targetColumn = ref<ColumnDto | null>(null)
 const targetCard = ref<CardDto | null>(null)
 const formValue = ref('')
@@ -73,6 +75,15 @@ watch(
   () => {
     if (route.name === 'board') {
       void loadBoard()
+    }
+  },
+)
+
+watch(
+  () => boards.boardAccessRevoked,
+  (revoked) => {
+    if (revoked) {
+      void router.replace({ name: 'dashboard' })
     }
   },
 )
@@ -413,57 +424,76 @@ async function runDialogAction(action: () => Promise<void>): Promise<void> {
             </p>
           </div>
 
-          <div v-if="board.role === 'editor'" class="flex items-center gap-2">
-            <button
-              v-if="isOwner"
-              type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-lime-300/30 bg-lime-300/[0.06] px-3.5 py-2.5 text-[12px] font-extrabold text-lime-200 transition-colors hover:bg-lime-300/[0.12]"
-              @click="isShareOpen = true"
-            >
-              <svg viewBox="0 0 20 20" class="h-3.5 w-3.5" fill="none" aria-hidden="true">
-                <path
-                  d="M7.6 11.2 12.4 8.8M7.6 8.8l4.8 2.4M6.2 7.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Zm7.6-2.6a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Zm0 5.6a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Z"
-                  stroke="currentColor"
-                  stroke-width="1.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              Поделиться
-            </button>
+          <div class="flex items-center gap-2">
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-[12px] font-bold text-slate-300 transition-colors hover:border-white/20 hover:text-white"
-              @click="openRenameBoard"
+              @click="isMembersOpen = true"
             >
               <svg viewBox="0 0 20 20" class="h-3.5 w-3.5" fill="none" aria-hidden="true">
                 <path
-                  d="m12.8 3.7 3.5 3.5-8.4 8.4-4.2.7.7-4.2 8.4-8.4Z"
-                  stroke="currentColor"
-                  stroke-width="1.4"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              Переименовать
-            </button>
-            <button
-              v-if="isOwner"
-              type="button"
-              class="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-500 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-300"
-              title="Удалить доску"
-              aria-label="Удалить доску"
-              @click="openDeleteBoard"
-            >
-              <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" aria-hidden="true">
-                <path
-                  d="M3.5 5.5h13M8 3.5h4M5 5.5l.7 10h8.6l.7-10M8.3 8.5v4.3M11.7 8.5v4.3"
+                  d="M7 9.5a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5Zm7.2 8v-1.2a3.3 3.3 0 0 0-3.3-3.3H6.1a3.3 3.3 0 0 0-3.3 3.3v1.2M13.7 4.4a2.75 2.75 0 0 1 0 5M15 15.8v-1.2a3.3 3.3 0 0 0-1.5-2.7"
                   stroke="currentColor"
                   stroke-width="1.4"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 />
               </svg>
+              Участники
             </button>
+
+            <template v-if="board.role === 'editor'">
+              <button
+                v-if="isOwner"
+                type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-lime-300/30 bg-lime-300/[0.06] px-3.5 py-2.5 text-[12px] font-extrabold text-lime-200 transition-colors hover:bg-lime-300/[0.12]"
+                @click="isShareOpen = true"
+              >
+                <svg viewBox="0 0 20 20" class="h-3.5 w-3.5" fill="none" aria-hidden="true">
+                  <path
+                    d="M7.6 11.2 12.4 8.8M7.6 8.8l4.8 2.4M6.2 7.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Zm7.6-2.6a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Zm0 5.6a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2Z"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                Поделиться
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-[12px] font-bold text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+                @click="openRenameBoard"
+              >
+                <svg viewBox="0 0 20 20" class="h-3.5 w-3.5" fill="none" aria-hidden="true">
+                  <path
+                    d="m12.8 3.7 3.5 3.5-8.4 8.4-4.2.7.7-4.2 8.4-8.4Z"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                Переименовать
+              </button>
+              <button
+                v-if="isOwner"
+                type="button"
+                class="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-500 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-300"
+                title="Удалить доску"
+                aria-label="Удалить доску"
+                @click="openDeleteBoard"
+              >
+                <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" aria-hidden="true">
+                  <path
+                    d="M3.5 5.5h13M8 3.5h4M5 5.5l.7 10h8.6l.7-10M8.3 8.5v4.3M11.7 8.5v4.3"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </template>
           </div>
         </div>
 
@@ -802,6 +832,15 @@ async function runDialogAction(action: () => Promise<void>): Promise<void> {
       :open="isShareOpen"
       :board-id="boardId"
       @close="isShareOpen = false"
+    />
+
+    <MembersDialog
+      :open="isMembersOpen"
+      :board-id="boardId"
+      :is-owner="isOwner"
+      :current-user-id="auth.user?.id ?? ''"
+      @close="isMembersOpen = false"
+      @left="router.replace({ name: 'dashboard' })"
     />
   </div>
 </template>

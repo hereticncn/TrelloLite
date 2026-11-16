@@ -3,6 +3,10 @@ import { defineStore } from 'pinia'
 import type {
   BoardColumnDto,
   BoardDto,
+  BoardMemberDto,
+  BoardMemberRemovedPayload,
+  BoardMemberUpdatedPayload,
+  BoardRoleDto,
   BoardShareDto,
   BoardSummaryDto,
   BoardSubscribePayload,
@@ -28,6 +32,7 @@ import type { Socket } from 'socket.io-client'
 import { api } from '@/lib/http'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { getRealtimeSocket } from '@/lib/realtime'
+import { useAuthStore } from '@/stores/auth'
 
 function toSummary(board: BoardDto): BoardSummaryDto {
   return {
@@ -64,6 +69,8 @@ export const useBoardsStore = defineStore('boards', () => {
   const error = ref('')
   const boardError = ref('')
   const presence = ref<PresenceUser[]>([])
+  const members = ref<BoardMemberDto[]>([])
+  const boardAccessRevoked = ref(false)
 
   let activeBoardId: string | null = null
   let realtimeBound = false
@@ -85,6 +92,7 @@ export const useBoardsStore = defineStore('boards', () => {
     isBoardLoading.value = true
     boardError.value = ''
     currentBoard.value = null
+    boardAccessRevoked.value = false
 
     try {
       currentBoard.value = normalizeBoard((await api.get<BoardDto>(`/boards/${boardId}`)).data)
@@ -137,6 +145,28 @@ export const useBoardsStore = defineStore('boards', () => {
   async function joinBoard(shareToken: string): Promise<JoinBoardResultDto> {
     const { data } = await api.post<JoinBoardResultDto>('/boards/join', { shareToken })
     return data
+  }
+
+  async function fetchMembers(boardId: string): Promise<void> {
+    members.value = (await api.get<BoardMemberDto[]>(`/boards/${boardId}/members`)).data
+  }
+
+  async function updateMemberRole(
+    boardId: string,
+    userId: string,
+    role: BoardRoleDto,
+  ): Promise<BoardMemberDto> {
+    const { data } = await api.patch<BoardMemberDto>(`/boards/${boardId}/members/${userId}`, {
+      role,
+    })
+    upsertMember(data)
+    applyOwnRole(data)
+    return data
+  }
+
+  async function removeMember(boardId: string, userId: string): Promise<void> {
+    await api.delete(`/boards/${boardId}/members/${userId}`)
+    removeMemberLocally(boardId, userId)
   }
 
   async function createColumn(boardId: string, title: string): Promise<ColumnDto> {
@@ -228,6 +258,39 @@ export const useBoardsStore = defineStore('boards', () => {
     }
   }
 
+  function upsertMember(member: BoardMemberDto): void {
+    const index = members.value.findIndex((item) => item.userId === member.userId)
+
+    if (index === -1) {
+      members.value = [...members.value, member]
+    } else {
+      members.value = members.value.map((item) =>
+        item.userId === member.userId ? member : item,
+      )
+    }
+  }
+
+  function applyOwnRole(member: BoardMemberDto): void {
+    const auth = useAuthStore()
+    if (auth.user?.id !== member.userId || !currentBoard.value) return
+
+    currentBoard.value.role = member.role
+    const summary = boards.value.find((item) => item.id === currentBoard.value?.id)
+    if (summary) {
+      summary.role = member.role
+    }
+  }
+
+  function removeMemberLocally(boardId: string, userId: string): void {
+    members.value = members.value.filter((member) => member.userId !== userId)
+
+    const auth = useAuthStore()
+    if (auth.user?.id !== userId) return
+
+    boardAccessRevoked.value = true
+    boards.value = boards.value.filter((board) => board.id !== boardId)
+  }
+
   function syncColumnsCount(boardId: string): void {
     const summary = boards.value.find((board) => board.id === boardId)
     if (summary && currentBoard.value) {
@@ -247,6 +310,7 @@ export const useBoardsStore = defineStore('boards', () => {
 
     activeBoardId = boardId
     presence.value = []
+    members.value = []
 
     if (socket.connected) {
       socket.emit(WS_EVENTS.BOARD_SUBSCRIBE, { boardId } satisfies BoardSubscribePayload)
@@ -267,6 +331,7 @@ export const useBoardsStore = defineStore('boards', () => {
 
     activeBoardId = null
     presence.value = []
+    members.value = []
   }
 
   function bindRealtimeHandlers(socket: Socket): void {
@@ -341,12 +406,25 @@ export const useBoardsStore = defineStore('boards', () => {
       if (currentBoard.value?.id !== payload.boardId) return
       presence.value = payload.users
     })
+
+    socket.on(WS_EVENTS.BOARD_MEMBER_UPDATED, (payload: BoardMemberUpdatedPayload) => {
+      if (currentBoard.value?.id !== payload.boardId) return
+      upsertMember(payload.member)
+      applyOwnRole(payload.member)
+    })
+
+    socket.on(WS_EVENTS.BOARD_MEMBER_REMOVED, (payload: BoardMemberRemovedPayload) => {
+      if (currentBoard.value?.id !== payload.boardId) return
+      removeMemberLocally(payload.boardId, payload.userId)
+    })
   }
 
   return {
     boards,
     currentBoard,
     presence,
+    members,
+    boardAccessRevoked,
     isLoading,
     isBoardLoading,
     error,
@@ -362,6 +440,9 @@ export const useBoardsStore = defineStore('boards', () => {
     fetchBoardShare,
     shareBoard,
     joinBoard,
+    fetchMembers,
+    updateMemberRole,
+    removeMember,
     createColumn,
     renameColumn,
     deleteColumn,

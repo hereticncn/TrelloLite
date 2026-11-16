@@ -34,12 +34,17 @@ export const joinBoardSchema = z.object({
   shareToken: z.string().trim().min(20, 'Некорректная ссылка').max(64, 'Некорректная ссылка'),
 })
 
+export const updateBoardMemberSchema = z.object({
+  role: boardRoleSchema,
+})
+
 export type CreateBoardInput = z.infer<typeof createBoardSchema>
 export type UpdateBoardInput = z.infer<typeof updateBoardSchema>
 export type CreateColumnInput = z.infer<typeof createColumnSchema>
 export type UpdateColumnInput = z.infer<typeof updateColumnSchema>
 export type ShareBoardInput = z.infer<typeof shareBoardSchema>
 export type JoinBoardInput = z.infer<typeof joinBoardSchema>
+export type UpdateBoardMemberInput = z.infer<typeof updateBoardMemberSchema>
 
 export type BoardRoleDto = z.infer<typeof boardRoleSchema>
 
@@ -74,6 +79,15 @@ export type BoardDto = BoardSummaryDto & {
 export type BoardShareDto = {
   token: string
   role: BoardRoleDto
+}
+
+export type BoardMemberDto = {
+  userId: string
+  name: string
+  email: string
+  role: BoardRoleDto
+  isOwner: boolean
+  joinedAt: string
 }
 
 export type JoinBoardResultDto = {

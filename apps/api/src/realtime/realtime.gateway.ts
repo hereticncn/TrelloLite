@@ -19,6 +19,9 @@ import type {
   ColumnUpdatedPayload,
   ColumnDto,
   CardDto,
+  BoardMemberDto,
+  BoardMemberRemovedPayload,
+  BoardMemberUpdatedPayload,
   PresenceUpdatedPayload,
   PresenceUser,
 } from '@trello/shared'
@@ -154,6 +157,36 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   emitCardDeleted(boardId: string, cardId: string, columnId: string): void {
     const payload: CardDeletedPayload = { boardId, cardId, columnId }
     this.server.to(boardRoom(boardId)).emit(WS_EVENTS.CARD_DELETED, payload)
+  }
+
+  emitBoardMemberUpdated(boardId: string, member: BoardMemberDto): void {
+    const payload: BoardMemberUpdatedPayload = { boardId, member }
+    this.server.to(boardRoom(boardId)).emit(WS_EVENTS.BOARD_MEMBER_UPDATED, payload)
+  }
+
+  emitBoardMemberRemoved(boardId: string, userId: string): void {
+    const payload: BoardMemberRemovedPayload = { boardId, userId }
+    this.server.to(boardRoom(boardId)).emit(WS_EVENTS.BOARD_MEMBER_REMOVED, payload)
+    this.dropMemberSockets(boardId, userId)
+  }
+
+  /** Removed users must stop receiving board events even before their token expires. */
+  private dropMemberSockets(boardId: string, userId: string): void {
+    const room = this.presence.get(boardId)
+    if (!room) return
+
+    for (const [socketId, user] of [...room]) {
+      if (user.id !== userId) continue
+
+      const socket = this.server.sockets.sockets.get(socketId)
+      this.removePresence(socketId, boardId)
+
+      if (!socket) continue
+
+      const state = this.sockets.get(socket)?.state
+      state?.boardIds.delete(boardId)
+      void socket.leave(boardRoom(boardId))
+    }
   }
 
   private async authenticate(socket: Socket): Promise<SocketState | null> {

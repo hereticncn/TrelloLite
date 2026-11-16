@@ -4,6 +4,7 @@ import { Prisma, type BoardRole } from '@prisma/client'
 import type {
   BoardColumnDto,
   BoardDto,
+  BoardMemberDto,
   BoardShareDto,
   BoardSummaryDto,
   ColumnDto,
@@ -12,6 +13,7 @@ import type {
   JoinBoardResultDto,
   ShareBoardInput,
   UpdateBoardInput,
+  UpdateBoardMemberInput,
   UpdateColumnInput,
 } from '@trello/shared'
 import { PrismaService } from '../prisma/prisma.service'
@@ -45,6 +47,24 @@ type BoardSummaryRecord = {
   updatedAt: Date
   members: Array<{ role: BoardRole }>
   _count: { columns: number }
+}
+
+type MemberRecord = {
+  userId: string
+  role: BoardRole
+  createdAt: Date
+  user: { name: string; email: string }
+}
+
+function toMemberDto(member: MemberRecord, ownerId: string): BoardMemberDto {
+  return {
+    userId: member.userId,
+    name: member.user.name,
+    email: member.user.email,
+    role: member.userId === ownerId ? 'editor' : member.role,
+    isOwner: member.userId === ownerId,
+    joinedAt: member.createdAt.toISOString(),
+  }
 }
 
 function toColumnDto(column: ColumnRecord): ColumnDto {
@@ -198,6 +218,107 @@ export class BoardsService {
     })
 
     return { boardId: board.id, title: board.title, role: member.role }
+  }
+
+  async listMembers(userId: string, boardId: string): Promise<BoardMemberDto[]> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      select: {
+        ownerId: true,
+        members: {
+          orderBy: { createdAt: 'asc' },
+          include: { user: { select: { name: true, email: true } } },
+        },
+      },
+    })
+
+    if (!board || !board.members.some((member) => member.userId === userId)) {
+      throw new NotFoundException('Доска не найдена')
+    }
+
+    return board.members.map((member) => toMemberDto(member, board.ownerId))
+  }
+
+  async updateMemberRole(
+    userId: string,
+    boardId: string,
+    targetUserId: string,
+    input: UpdateBoardMemberInput,
+  ): Promise<BoardMemberDto> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      select: { ownerId: true },
+    })
+
+    if (!board) {
+      throw new NotFoundException('Доска не найдена')
+    }
+
+    if (board.ownerId !== userId) {
+      throw new ForbiddenException('Менять роли может только владелец доски')
+    }
+
+    if (board.ownerId === targetUserId) {
+      throw new ForbiddenException('Роль владельца доски изменить нельзя')
+    }
+
+    const member = await this.prisma.boardMember.findUnique({
+      where: { boardId_userId: { boardId, userId: targetUserId } },
+      include: { user: { select: { name: true, email: true } } },
+    })
+
+    if (!member) {
+      throw new NotFoundException('Участник не найден')
+    }
+
+    const updated =
+      member.role === input.role
+        ? member
+        : await this.prisma.boardMember.update({
+            where: { boardId_userId: { boardId, userId: targetUserId } },
+            data: { role: input.role },
+            include: { user: { select: { name: true, email: true } } },
+          })
+
+    const dto = toMemberDto(updated, board.ownerId)
+    this.realtime.emitBoardMemberUpdated(boardId, dto)
+    return dto
+  }
+
+  async removeMember(userId: string, boardId: string, targetUserId: string): Promise<void> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      select: { ownerId: true },
+    })
+
+    if (!board) {
+      throw new NotFoundException('Доска не найдена')
+    }
+
+    const isSelf = userId === targetUserId
+
+    if (!isSelf && board.ownerId !== userId) {
+      throw new ForbiddenException('Удалять участников может только владелец доски')
+    }
+
+    if (board.ownerId === targetUserId) {
+      throw new ForbiddenException('Владелец не может покинуть доску — удалите её целиком')
+    }
+
+    const member = await this.prisma.boardMember.findUnique({
+      where: { boardId_userId: { boardId, userId: targetUserId } },
+      select: { userId: true },
+    })
+
+    if (!member) {
+      throw new NotFoundException('Участник не найден')
+    }
+
+    await this.prisma.boardMember.delete({
+      where: { boardId_userId: { boardId, userId: targetUserId } },
+    })
+
+    this.realtime.emitBoardMemberRemoved(boardId, targetUserId)
   }
 
   async remove(userId: string, boardId: string): Promise<void> {

@@ -15,8 +15,10 @@ import {
   createColumnSchema,
   joinBoardSchema,
   shareBoardSchema,
+  updateBoardMemberSchema,
   updateBoardSchema,
   type BoardDto,
+  type BoardMemberDto,
   type BoardShareDto,
   type BoardSummaryDto,
   type ColumnDto,
@@ -26,6 +28,7 @@ import {
   type JoinBoardResultDto,
   type ShareBoardInput,
   type UpdateBoardInput,
+  type UpdateBoardMemberInput,
 } from '@trello/shared'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe'
@@ -91,6 +94,34 @@ export class BoardsController {
     @Body(new ZodValidationPipe(updateBoardSchema)) input: UpdateBoardInput,
   ): Promise<BoardDto> {
     return this.boards.update(user.id, id, input)
+  }
+
+  @Get(':id/members')
+  listMembers(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<BoardMemberDto[]> {
+    return this.boards.listMembers(user.id, id)
+  }
+
+  @Patch(':id/members/:userId')
+  updateMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Body(new ZodValidationPipe(updateBoardMemberSchema)) input: UpdateBoardMemberInput,
+  ): Promise<BoardMemberDto> {
+    return this.boards.updateMemberRole(user.id, id, targetUserId, input)
+  }
+
+  @Delete(':id/members/:userId')
+  @HttpCode(204)
+  removeMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+  ): Promise<void> {
+    return this.boards.removeMember(user.id, id, targetUserId)
   }
 
   @Delete(':id')
